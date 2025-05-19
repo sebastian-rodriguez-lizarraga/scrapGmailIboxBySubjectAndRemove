@@ -26,13 +26,31 @@ def conectar_mail():
     mail.login(EMAIL, PASSWORD)
     return mail
 
+def decodificar_asunto(subject_header):
+    if subject_header is None:
+        return "(Sin asunto)"
+
+    asunto_final = ""
+    for parte, cod in decode_header(subject_header):
+        if isinstance(parte, bytes):
+            if not cod or cod.lower() in ("unknown-8bit", "x-unknown", "8bit"):
+                cod = chardet.detect(parte)["encoding"] or "utf-8"
+            try:
+                codecs.lookup(cod)  # valida cod
+                parte = parte.decode(cod, errors="replace")
+            except Exception:
+                parte = parte.decode("utf-8", errors="replace")
+        asunto_final += parte
+    return asunto_final
+
+
 def eliminar_por_asunto():
     mail = conectar_mail()
     mail.select("inbox")
 
     status, mensajes = mail.search(None, "ALL")
     ids = mensajes[0].split()
-    ids_a_revisar = ids[-CANTIDAD_A_REVISAR:]  
+    ids_a_revisar = ids[-CANTIDAD_A_REVISAR:]  # Últimos N correos
     eliminados = 0
 
     for mail_id in reversed(ids_a_revisar):
@@ -47,10 +65,7 @@ def eliminar_por_asunto():
             continue
         
         # Decodificar el asunto
-        asunto, cod = decode_header(msg["Subject"])[0]
-        if isinstance(asunto, bytes):
-            asunto = asunto.decode(cod or "utf-8", errors="ignore")
-
+        asunto = decodificar_asunto(msg["Subject"])
         # Comprobamos si contiene la palabra clave en el asunto
         if PALABRA_CLAVE_ASUNTO.lower() in asunto.lower():
             print(f"Moviendo a la papelera: {asunto}")
